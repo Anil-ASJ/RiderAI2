@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.speech.RecognizerIntent
 import android.view.KeyEvent
 import android.widget.Button
@@ -17,13 +19,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.riderai.riderai.wake.WakeService
-import com.riderai.riderai.voice.VoiceCommandProcessor
 
 class MainActivity : AppCompatActivity() {
 
-    companion object {
-        const val ACTION_WAKE_LISTEN = "com.riderai.riderai.ACTION_WAKE_LISTEN"
-    }
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var isBluetoothConnected = false
     private var lastCalledNumber: String? = null
@@ -35,8 +33,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusMic: TextView
     private lateinit var statusCall: TextView
     private lateinit var voiceStatus: TextView
-
-    private lateinit var voiceCommandProcessor: VoiceCommandProcessor
 
     private var wakeServiceStarted = false
 
@@ -50,10 +46,6 @@ class MainActivity : AppCompatActivity() {
         statusCall = findViewById(R.id.statusCall)
         voiceStatus = findViewById(R.id.voiceStatus)
 
-        voiceCommandProcessor = VoiceCommandProcessor(this) { message ->
-            voiceStatus.text = message
-        }
-
         // Mic button
         findViewById<Button>(R.id.btnMic).setOnClickListener {
             startVoiceRecognition()
@@ -61,14 +53,7 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissionsSafely()
         startBluetoothListener()
-        handleWakeIntent(intent)
     }
-
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        handleWakeIntent(intent)
-    }
-
 
     // ================= PERMISSIONS =================
 
@@ -91,6 +76,7 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
             return
         }
+
         startWakeServiceIfPermitted()
     }
 
@@ -160,20 +146,18 @@ class MainActivity : AppCompatActivity() {
 
     // ================= VOICE =================
 
-    private fun startVoiceRecognition(playTone: Boolean = true) {
+    private fun startVoiceRecognition() {
 
         if (!isBluetoothConnected) {
-
-            statusMic.text = "🎤 Mic On"
-            voiceStatus.text = "Using device mic (Bluetooth not connected)"
+            statusMic.text = "🎤 Mic Off"
+            voiceStatus.text = "Bluetooth not connected"
+            return
         }
 
         statusMic.text = "🎤 Listening…"
         voiceStatus.text = "Listening for commands…"
 
-        if (playTone) {
-            playBeep()
-        }
+        playBeep()
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
@@ -208,19 +192,75 @@ class MainActivity : AppCompatActivity() {
             ?.lowercase()
             ?: return
 
-        voiceCommandProcessor.process(spokenText)
+        voiceStatus.text = "Heard: \"$spokenText\""
+
+        when {
+            spokenText == "call again" -> callAgain()
+            spokenText.startsWith("call") -> handleCallCommand(spokenText)
+            spokenText.contains("play spotify") -> openSpotifyAndPlay()
+            spokenText.contains("pause") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_PAUSE)
+            spokenText.contains("next") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT)
+            spokenText.contains("previous") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            else -> voiceStatus.text = "❓ Unknown: \"$spokenText\""
+        }
+    }
+
+    // ================= CALLING =================
+
+    private fun handleCallCommand(command: String) {
+
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CALL_PHONE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val name = command.replace("call", "").trim()
+        if (name.isEmpty()) return
+
+        val number = getPhoneNumberByName(name) ?: return
+        lastCalledNumber = number
+
+        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
+    }
+
+    private fun callAgain() {
+        lastCalledNumber?.let {
+            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$it")))
+        }
+    }
+
+    private fun getPhoneNumberByName(name: String): String? {
+        val cursor = contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+            arrayOf("%$name%"),
+            null
+        )
+        cursor?.use {
+            if (it.moveToFirst()) return it.getString(0)
+        }
+        return null
+    }
+
+    // ================= MEDIA =================
+
+    private fun sendMediaKey(keyCode: Int) {
+        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+        audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
     }
 
     private fun playBeep() {
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         ToneGenerator(AudioManager.STREAM_MUSIC, 100)
             .startTone(ToneGenerator.TONE_PROP_BEEP, 150)
     }
 
-    private fun handleWakeIntent(intent: Intent?) {
-        if (intent?.action == ACTION_WAKE_LISTEN) {
-            voiceStatus.text = "🎧 Earbud long press detected. Listening..."
-            startVoiceRecognition()
-        }
+    private fun openSpotifyAndPlay() {
+        val intent = Intent(this, RiderForegroundService::class.java)
+        intent.action = "PLAY_SPOTIFY"
+        startService(intent)
+        voiceStatus.text = "🎵 Spotify started..."
     }
 }
