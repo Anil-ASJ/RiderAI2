@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.riderai.riderai.wake.WakeService
+import com.riderai.riderai.voice.VoiceCommandProcessor
 
 class MainActivity : AppCompatActivity() {
 
@@ -37,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusCall: TextView
     private lateinit var voiceStatus: TextView
 
+    private lateinit var voiceCommandProcessor: VoiceCommandProcessor
+
     private var wakeServiceStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +51,10 @@ class MainActivity : AppCompatActivity() {
         statusMic = findViewById(R.id.statusMic)
         statusCall = findViewById(R.id.statusCall)
         voiceStatus = findViewById(R.id.voiceStatus)
+
+        voiceCommandProcessor = VoiceCommandProcessor(this) { message ->
+            voiceStatus.text = message
+        }
 
         // Mic button
         findViewById<Button>(R.id.btnMic).setOnClickListener {
@@ -203,76 +210,13 @@ class MainActivity : AppCompatActivity() {
             ?.lowercase()
             ?: return
 
-        voiceStatus.text = "Heard: \"$spokenText\""
-
-        when {
-            spokenText == "call again" -> callAgain()
-            spokenText.startsWith("call") -> handleCallCommand(spokenText)
-            spokenText.contains("play spotify") -> openSpotifyAndPlay()
-            spokenText.contains("pause") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_PAUSE)
-            spokenText.contains("next") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT)
-            spokenText.contains("previous") -> sendMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-            else -> voiceStatus.text = "❓ Unknown: \"$spokenText\""
-        }
-    }
-
-    // ================= CALLING =================
-
-    private fun handleCallCommand(command: String) {
-
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CALL_PHONE
-            ) != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        val name = command.replace("call", "").trim()
-        if (name.isEmpty()) return
-
-        val number = getPhoneNumberByName(name) ?: return
-        lastCalledNumber = number
-
-        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
-    }
-
-    private fun callAgain() {
-        lastCalledNumber?.let {
-            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$it")))
-        }
-    }
-
-    private fun getPhoneNumberByName(name: String): String? {
-        val cursor = contentResolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-            arrayOf("%$name%"),
-            null
-        )
-        cursor?.use {
-            if (it.moveToFirst()) return it.getString(0)
-        }
-        return null
-    }
-
-    // ================= MEDIA =================
-
-    private fun sendMediaKey(keyCode: Int) {
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-        audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+        voiceCommandProcessor.process(spokenText)
     }
 
     private fun playBeep() {
+        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         ToneGenerator(AudioManager.STREAM_MUSIC, 100)
             .startTone(ToneGenerator.TONE_PROP_BEEP, 150)
-    }
-
-    private fun openSpotifyAndPlay() {
-        val intent = Intent(this, RiderForegroundService::class.java)
-        intent.action = "PLAY_SPOTIFY"
-        startService(intent)
-        voiceStatus.text = "🎵 Spotify started..."
     }
 
     private fun handleWakeIntent(intent: Intent?) {
