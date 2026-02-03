@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusCall: TextView
     private lateinit var voiceStatus: TextView
 
+    private var wakeServiceStarted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -51,7 +53,6 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissionsSafely()
         startBluetoothListener()
-        startWakeService()
     }
 
     // ================= PERMISSIONS =================
@@ -73,7 +74,36 @@ class MainActivity : AppCompatActivity() {
 
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+            return
         }
+
+        startWakeServiceIfPermitted()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode != 100) return
+
+        startWakeServiceIfPermitted()
+    }
+
+    private fun startWakeServiceIfPermitted() {
+        if (wakeServiceStarted) return
+
+        val hasRecordAudio = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasRecordAudio) return
+
+        wakeServiceStarted = true
+        startWakeService()
     }
 
     // ================= WAKE SERVICE =================
