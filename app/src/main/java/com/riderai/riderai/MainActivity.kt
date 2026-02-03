@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.riderai.riderai.wake.WakeService
+import android.speech.tts.TextToSpeech
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -39,6 +40,10 @@ class MainActivity : AppCompatActivity() {
 
     private var wakeServiceStarted = false
 
+    private var micUnlocked = false
+    private var textToSpeech: TextToSpeech? = null
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -52,6 +57,11 @@ class MainActivity : AppCompatActivity() {
         // Mic button
         findViewById<Button>(R.id.btnMic).setOnClickListener {
             startVoiceRecognition()
+        }
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                voiceStatus.text = "Text-to-speech unavailable"
+            }
         }
 
         requestPermissionsSafely()
@@ -156,6 +166,11 @@ class MainActivity : AppCompatActivity() {
     // ================= VOICE =================
 
     private fun startVoiceRecognition() {
+        if (!micUnlocked) {
+            statusMic.text = "🎤 Mic Off"
+            voiceStatus.text = "Hold the power button or earbud for 3s to enable"
+            return
+        }
 
         if (!isBluetoothConnected) {
             statusMic.text = "🎤 Mic Off"
@@ -194,6 +209,8 @@ class MainActivity : AppCompatActivity() {
         if (requestCode != VOICE_REQUEST_CODE) return
 
         statusMic.text = "🎤 Idle"
+        statusMic.text = "🎤 Off"
+        micUnlocked = false
 
         val spokenText = data
             ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
@@ -202,6 +219,7 @@ class MainActivity : AppCompatActivity() {
             ?: return
 
         voiceStatus.text = "Heard: \"$spokenText\""
+        speakCommandFeedback(spokenText)
 
         when {
             spokenText == "call again" -> callAgain()
@@ -275,8 +293,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleWakeIntent(intent: Intent?) {
         if (intent?.action == ACTION_WAKE_LISTEN) {
+            micUnlocked = true
             voiceStatus.text = "🎧 Earbud long press detected. Listening..."
             startVoiceRecognition()
         }
+    }
+    private fun speakCommandFeedback(command: String) {
+        val message = "Executing command: $command"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            textToSpeech?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "command-feedback")
+        } else {
+            @Suppress("DEPRECATION")
+            textToSpeech?.speak(message, TextToSpeech.QUEUE_FLUSH, null)
+        }
+    }
+
+    override fun onDestroy() {
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        super.onDestroy()
     }
 }
