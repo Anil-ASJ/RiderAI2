@@ -13,6 +13,8 @@ import android.speech.*
 import android.util.Log
 import com.riderai.riderai.R
 import com.riderai.riderai.voice.VoiceCommandProcessor
+import com.riderai.riderai.MainActivity
+
 
 class WakeService : Service() {
 
@@ -39,6 +41,7 @@ class WakeService : Service() {
         startForegroundNotification()
         configureAudioForWakeWord()
         setupMediaSession()
+
 
         voiceCommandProcessor = VoiceCommandProcessor(this) { message ->
             Log.d("VOICE", message)
@@ -231,6 +234,9 @@ class WakeService : Service() {
         mediaSession.release()
         super.onDestroy()
     }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
     private fun setupMediaSession() {
         mediaSession = MediaSession(this, "RiderAIMediaSession").apply {
             setFlags(
@@ -238,7 +244,7 @@ class WakeService : Service() {
                         MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
             setCallback(object : MediaSession.Callback() {
-                override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
+                override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
                     val keyEvent = mediaButtonIntent
                         ?.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
                         ?: return false
@@ -290,6 +296,4 @@ class WakeService : Service() {
         }
         startActivity(intent)
     }
-
-    override fun onBind(intent: Intent?): IBinder? = null
 }

@@ -10,6 +10,7 @@ import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.view.KeyEvent
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -218,8 +219,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleWakeIntent(intent: Intent?) {
         if (intent?.action == ACTION_WAKE_LISTEN) {
-            voiceStatus.text = "👋 Hey Rider detected. Listening..."
-            playBeep()
+            voiceStatus.text = "🎧 Earbud long press detected. Listening..."
             startVoiceRecognition()
         }
     }
