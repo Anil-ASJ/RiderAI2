@@ -10,7 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
-import androidx.media.session.MediaSessionCompat
+import android.media.session.MediaSession
 import com.riderai.riderai.MainActivity
 import com.riderai.riderai.R
 
@@ -18,7 +18,7 @@ class WakeService : Service() {
 
     private lateinit var porcupineManager: PorcupineManager
     private lateinit var audioManager: AudioManager
-    private lateinit var mediaSession: MediaSessionCompat
+    private lateinit var mediaSession: MediaSession
 
     private var audioFocusRequest: AudioFocusRequest? = null
     private var bluetoothScoStarted = false
@@ -89,9 +89,9 @@ class WakeService : Service() {
     // ================= MEDIA SESSION =================
 
     private fun setupMediaSession() {
-        mediaSession = MediaSessionCompat(this, "RiderAIMediaSession").apply {
+        mediaSession = MediaSession(this, "RiderAIMediaSession").apply {
 
-            setCallback(object : MediaSessionCompat.Callback() {
+            setCallback(object : MediaSession.Callback() {
 
                 override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
                     val keyEvent =
