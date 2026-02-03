@@ -21,6 +21,9 @@ import androidx.core.content.ContextCompat
 import com.riderai.riderai.wake.WakeService
 
 class MainActivity : AppCompatActivity() {
+    companion object {
+        const val ACTION_WAKE_LISTEN = "com.riderai.riderai.ACTION_WAKE_LISTEN"
+    }
 
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var isBluetoothConnected = false
@@ -53,6 +56,12 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissionsSafely()
         startBluetoothListener()
+        handleWakeIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleWakeIntent(intent)
     }
 
     // ================= PERMISSIONS =================
@@ -262,5 +271,12 @@ class MainActivity : AppCompatActivity() {
         intent.action = "PLAY_SPOTIFY"
         startService(intent)
         voiceStatus.text = "🎵 Spotify started..."
+    }
+
+    private fun handleWakeIntent(intent: Intent?) {
+        if (intent?.action == ACTION_WAKE_LISTEN) {
+            voiceStatus.text = "🎧 Earbud long press detected. Listening..."
+            startVoiceRecognition()
+        }
     }
 }
