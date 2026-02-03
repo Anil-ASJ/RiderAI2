@@ -54,4 +54,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("ai.picovoice:porcupine-android:4.0.0")
+    implementation("androidx.media:media:1.7.0")
 }
