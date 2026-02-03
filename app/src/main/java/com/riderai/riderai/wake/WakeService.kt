@@ -82,6 +82,7 @@ class WakeService : Service() {
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
+            action = MainActivity.ACTION_WAKE_LISTEN
         }
         startActivity(intent)
     }

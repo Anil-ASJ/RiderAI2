@@ -22,6 +22,9 @@ import com.riderai.riderai.wake.WakeService
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        const val ACTION_WAKE_LISTEN = "com.riderai.riderai.ACTION_WAKE_LISTEN"
+    }
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var isBluetoothConnected = false
     private var lastCalledNumber: String? = null
@@ -53,7 +56,14 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissionsSafely()
         startBluetoothListener()
+        handleWakeIntent(intent)
     }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleWakeIntent(intent)
+    }
+
 
     // ================= PERMISSIONS =================
 
@@ -145,18 +155,20 @@ class MainActivity : AppCompatActivity() {
 
     // ================= VOICE =================
 
-    private fun startVoiceRecognition() {
+    private fun startVoiceRecognition(playTone: Boolean = true) {
 
         if (!isBluetoothConnected) {
-            statusMic.text = "🎤 Mic Off"
-            voiceStatus.text = "Bluetooth not connected"
-            return
+
+            statusMic.text = "🎤 Mic On"
+            voiceStatus.text = "Using device mic (Bluetooth not connected)"
         }
 
         statusMic.text = "🎤 Listening…"
         voiceStatus.text = "Listening for commands…"
 
-        playBeep()
+        if (playTone) {
+            playBeep()
+        }
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
@@ -261,5 +273,13 @@ class MainActivity : AppCompatActivity() {
         intent.action = "PLAY_SPOTIFY"
         startService(intent)
         voiceStatus.text = "🎵 Spotify started..."
+    }
+
+    private fun handleWakeIntent(intent: Intent?) {
+        if (intent?.action == ACTION_WAKE_LISTEN) {
+            voiceStatus.text = "👋 Hey Rider detected. Listening..."
+            playBeep()
+            startVoiceRecognition()
+        }
     }
 }
