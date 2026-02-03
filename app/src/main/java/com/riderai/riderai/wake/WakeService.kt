@@ -4,7 +4,9 @@ import ai.picovoice.porcupine.PorcupineManager
 import android.app.*
 import android.content.Intent
 import android.media.*
+import android.media.session.MediaSession
 import android.os.Build
+import android.view.KeyEvent
 import android.os.Bundle
 import android.os.IBinder
 import android.speech.*
@@ -21,6 +23,11 @@ class WakeService : Service() {
 
     private var audioFocusRequest: AudioFocusRequest? = null
     private var bluetoothScoStarted = false
+
+    private lateinit var mediaSession: MediaSession
+    private var mediaButtonDownTime: Long? = null
+
+    private val longPressThresholdMs = 3000L
     private var wakeWordActive = false
     private var isListeningForCommand = false
 
@@ -31,6 +38,7 @@ class WakeService : Service() {
 
         startForegroundNotification()
         configureAudioForWakeWord()
+        setupMediaSession()
 
         voiceCommandProcessor = VoiceCommandProcessor(this) { message ->
             Log.d("VOICE", message)
@@ -220,7 +228,67 @@ class WakeService : Service() {
         }
 
         audioManager.mode = AudioManager.MODE_NORMAL
+        mediaSession.release()
         super.onDestroy()
+    }
+    private fun setupMediaSession() {
+        mediaSession = MediaSession(this, "RiderAIMediaSession").apply {
+            setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                        MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+            )
+            setCallback(object : MediaSession.Callback() {
+                override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
+                    val keyEvent = mediaButtonIntent
+                        ?.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                        ?: return false
+
+                    val keyCode = keyEvent.keyCode
+                    val isHeadsetButton = keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+                            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+                            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+                            keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
+
+                    if (!isHeadsetButton) {
+                        return false
+                    }
+
+                    when (keyEvent.action) {
+                        KeyEvent.ACTION_DOWN -> {
+                            if (mediaButtonDownTime == null) {
+                                mediaButtonDownTime = keyEvent.downTime
+                            }
+                            return true
+                        }
+                        KeyEvent.ACTION_UP -> {
+                            val downTime = mediaButtonDownTime ?: keyEvent.downTime
+                            val duration = keyEvent.eventTime - downTime
+                            mediaButtonDownTime = null
+
+                            if (duration >= longPressThresholdMs) {
+                                triggerEarbudLongPress()
+                                return true
+                            }
+                            return false
+                        }
+                        else -> return false
+                    }
+                }
+            })
+            isActive = true
+        }
+    }
+
+    private fun triggerEarbudLongPress() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_WAKE_LISTEN
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        startActivity(intent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
